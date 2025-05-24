@@ -1,121 +1,121 @@
-// Basic demo for accelerometer readings from Adafruit MPU6050
-
+#include <Wire.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
-#include <Wire.h>
-const int Red = 9;
-const int Green = 10;
-const int Blue = 11;
-
+#include <math.h>
 
 Adafruit_MPU6050 mpu;
 
-void setup(void) {
-  //rgb_led
-  pinMode(Red, OUTPUT);
-  pinMode(Green, OUTPUT);
-  pinMode(Blue, OUTPUT);
-  //
+const int red = 16;
+const int green = 17;
+const int blue = 15;
+
+unsigned long lastSensorReadTime = 0;  
+unsigned long delayDuration = 200;
+
+int XYArray[2][2] = {{0,0},{0,0}};  // 0: 舊值, 1: 新值
+int ledColorArray[6] = {0, 0, 0, 255, 255, 255};
+int greenLedArray[6] = {32, 33, 25, 26, 27, 14};
+
+int redValue = 0;
+int greenValue = 0;
+int blueValue = 0;
+
+const float Vibration = 0.5; // 震動系數
+
+void setup() {
+  pinMode(red, OUTPUT);
+  pinMode(green, OUTPUT);
+  pinMode(blue, OUTPUT);  
+  for (int i = 0; i < 6; i++) {
+    pinMode(greenLedArray[i], OUTPUT);
+  }
+  
   Serial.begin(115200);
-  while (!Serial)
-    delay(10); // will pause Zero, Leonardo, etc until serial console opens
 
-  Serial.println("Adafruit MPU6050 test!");
-
-  // Try to initialize!
   if (!mpu.begin()) {
-    Serial.println("Failed to find MPU6050 chip");
-    while (1) {
-      delay(10);
-    }
+    Serial.println("MPU6050 false！");
+    while (1);
   }
-  Serial.println("MPU6050 Found!");
+  
+  Serial.println("MPU6050 ture！");
 
-  mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
-  Serial.print("Accelerometer range set to: ");
-  switch (mpu.getAccelerometerRange()) {
-  case MPU6050_RANGE_2_G:
-    Serial.println("+-2G");
-    break;
-  case MPU6050_RANGE_4_G:
-    Serial.println("+-4G");
-    break;
-  case MPU6050_RANGE_8_G:
-    Serial.println("+-8G");
-    break;
-  case MPU6050_RANGE_16_G:
-    Serial.println("+-16G");
-    break;
-  }
+  mpu.setAccelerometerRange(MPU6050_RANGE_4_G);
   mpu.setGyroRange(MPU6050_RANGE_500_DEG);
-  Serial.print("Gyro range set to: ");
-  switch (mpu.getGyroRange()) {
-  case MPU6050_RANGE_250_DEG:
-    Serial.println("+- 250 deg/s");
-    break;
-  case MPU6050_RANGE_500_DEG:
-    Serial.println("+- 500 deg/s");
-    break;
-  case MPU6050_RANGE_1000_DEG:
-    Serial.println("+- 1000 deg/s");
-    break;
-  case MPU6050_RANGE_2000_DEG:
-    Serial.println("+- 2000 deg/s");
-    break;
-  }
-
   mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
-  Serial.print("Filter bandwidth set to: ");
-  switch (mpu.getFilterBandwidth()) {
-  case MPU6050_BAND_260_HZ:
-    Serial.println("260 Hz");
-    break;
-  case MPU6050_BAND_184_HZ:
-    Serial.println("184 Hz");
-    break;
-  case MPU6050_BAND_94_HZ:
-    Serial.println("94 Hz");
-    break;
-  case MPU6050_BAND_44_HZ:
-    Serial.println("44 Hz");
-    break;
-  case MPU6050_BAND_21_HZ:
-    Serial.println("21 Hz");
-    break;
-  case MPU6050_BAND_10_HZ:
-    Serial.println("10 Hz");
-    break;
-  case MPU6050_BAND_5_HZ:
-    Serial.println("5 Hz");
-    break;
-  }
 
-  Serial.println("");
-  delay(100);
+  Serial.println("R！");
 }
 
 void loop() {
-  /* Get new sensor events with the readings */
-  sensors_event_t a, g, temp;
-  mpu.getEvent(&a, &g, &temp);
-  /* Print out the values */
-  Serial.print("Rotation X: ");
-  Serial.print(g.gyro.x);
-  Serial.print(", Y: ");
-  Serial.print(g.gyro.y);
-  Serial.print(", Z: ");
-  Serial.print(g.gyro.z);
-  Serial.println(" rad/s");
-  Serial.println("");
+  unsigned long currentTime = millis();
+  led(currentTime);
   
-  //rgbLED
-  setColor(255, 0, 0); //將XY數轉成rgb的公式 //Z=光度 
+  if (currentTime - lastSensorReadTime >= delayDuration) {
+    lastSensorReadTime = currentTime;
 
-  delay(500);
+    sensors_event_t a, g, temp;
+    mpu.getEvent(&a, &g, &temp);
+
+    // 舊值更新
+    XYArray[0][0] = XYArray[1][0];
+    XYArray[0][1] = XYArray[1][1];
+
+    // 新值
+    int x = a.acceleration.x * 100; 
+    int y = a.acceleration.y * 100;
+    XYArray[1][0] = x;
+    XYArray[1][1] = y;
+
+    // 計算是否震動
+    float xa = XYArray[1][0] - XYArray[0][0];
+    float ya = XYArray[1][1] - XYArray[0][1];
+    float xyAverage = fabs(xa + ya);
+
+    if (xyAverage > Vibration * 100) {
+      ledColor();
+    }
+  }
 }
 
-void setColor(int redValue, int greenValue,  int blueValue) {
-  analogWrite(Red, redValue);
-  analogWrite(Green,  greenValue);
-  analogWrite(Blue, blueValue);
+void ledColor() {
+  // 更新舊RGB
+  ledColorArray[0] = ledColorArray[3];
+  ledColorArray[1] = ledColorArray[4];
+  ledColorArray[2] = ledColorArray[5];
+
+  // 新 RGB 隨機
+  ledColorArray[3] = random(0, 256);
+  ledColorArray[4] = random(0, 256);
+  ledColorArray[5] = random(0, 256);
+
+  // RGB變化
+  for (int i = 0; i < 3; i++) {
+    int* currentValue = (i == 0) ? &redValue : (i == 1) ? &greenValue : &blueValue;
+    int diff = ledColorArray[3 + i] - ledColorArray[i];
+
+    if (diff > 0) {
+      (*currentValue)++;
+    } else if (diff < 0) {
+      (*currentValue)--;
+    }
+  }
+
+  analogWrite(red, redValue);
+  analogWrite(green, greenValue);
+  analogWrite(blue, blueValue);
+}
+
+void led(unsigned long currentTime) {
+  float sinA = sin(TWO_PI / 7200 * currentTime);
+  float sinB = sin(TWO_PI * currentTime / 7200 + PI / 3); 
+  float sinC = sin(TWO_PI * currentTime / 7200 + 2 * PI / 3);
+
+  analogWrite(32, ((sinA + 1) * 100));
+  analogWrite(33, ((sinA + 1) * 100));
+
+  analogWrite(25, ((sinB + 1) * 100));
+  analogWrite(26, ((sinB + 1) * 100));
+
+  analogWrite(27, ((sinC + 1) * 100));
+  analogWrite(14, ((sinC + 1) * 100));
 }
